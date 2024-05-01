@@ -9,7 +9,7 @@ LOCATION="${LOCATION:-eastus}"
 PATH_TO_PUBLIC_SSH_KEY="$HOME/.ssh/id_rsa.pub"
 PATH_TO_PRIVATE_SSH_KEY="$HOME/.ssh/id_rsa"
 VM_NAME="${VM_NAME:-AzInitFunctionalTest}"
-VM_IMAGE="${VM_IMAGE:-Canonical:0001-com-ubuntu-server-jammy:22_04-lts:latest}"
+VM_IMAGE="${VM_IMAGE:-MicrosoftCBLMariner:azure-linux:azure-linux-gen2:latest}"
 VM_SIZE="${VM_SIZE:-Standard_D2lds_v5}"
 VM_ADMIN_USERNAME="${VM_ADMIN_USERNAME:-azureuser}"
 AZURE_SSH_KEY_NAME="${AZURE_SSH_KEY_NAME:-azure-ssh-key}"
@@ -62,10 +62,13 @@ echo "Getting VM Public IP Address..."
 PUBLIC_IP=$(az vm show -d -g $RG -n $VM_NAME_WITH_TIMESTAMP --query publicIps -o tsv)
 echo $PUBLIC_IP
 
-scp -o StrictHostKeyChecking=no -i $PATH_TO_PRIVATE_SSH_KEY ./target/debug/functional_tests $VM_ADMIN_USERNAME@$PUBLIC_IP:~
+scp -o StrictHostKeyChecking=no -i $PATH_TO_PRIVATE_SSH_KEY ./target/debug/azure-init $VM_ADMIN_USERNAME@$PUBLIC_IP:~
 
 echo "Logging into VM..."
-ssh -o StrictHostKeyChecking=no -i $PATH_TO_PRIVATE_SSH_KEY $VM_ADMIN_USERNAME@$PUBLIC_IP 'sudo ./functional_tests test_user' 
+ssh -v -o StrictHostKeyChecking=no -i $PATH_TO_PRIVATE_SSH_KEY $VM_ADMIN_USERNAME@$PUBLIC_IP 'sudo ./azure-init' 
+
+echo "entering VM..."
+ssh -i $PATH_TO_PRIVATE_SSH_KEY $VM_ADMIN_USERNAME@$PUBLIC_IP
 
 # Delete the resource group
-az group delete -g $RG --yes --no-wait
+#az group delete -g $RG --yes --no-wait

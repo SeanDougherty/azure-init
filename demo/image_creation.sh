@@ -55,7 +55,7 @@ storage=testagent$epoch
 location=eastus
 vm=testvm-$epoch
 ssh_key_path=~/.ssh/id_rsa.pub
-base_image=canonical:0001-com-ubuntu-server-jammy:22_04-lts:latest
+base_image=MicrosoftCBLMariner:azure-linux:azure-linux-gen2:latest
 admin_username=testuser-$epoch
 
 echo "*********************************************************************"

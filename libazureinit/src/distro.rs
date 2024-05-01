@@ -14,6 +14,7 @@ pub trait Distribution {
 pub enum Distributions {
     Debian,
     Ubuntu,
+    AzureLinux,
 }
 
 impl Distribution for Distributions {
@@ -63,12 +64,62 @@ impl Distribution for Distributions {
                 }
 
                 Ok(0)
+            },
+            Distributions::AzureLinux => {
+                let status = Command::new("useradd")
+                    .arg(username)
+                    .arg("--comment")
+                    .arg(
+                      "Provisioning agent created this user based on username provided in IMDS",
+                    )
+                    .arg("--groups")
+                    .arg("wheel")
+                    .arg("-m")
+                    .status()?;
+                if !status.success() {
+                    return Err(Error::SubprocessFailed {
+                        command: "useradd".to_string(),
+                        status,
+                    });
+                }
+
+                if password.is_empty() {
+                    let status = Command::new("passwd")
+                        .arg("-d")
+                        .arg(username)
+                        .status()?;
+                    if !status.success() {
+                        return Err(Error::SubprocessFailed {
+                            command: "passwd".to_string(),
+                            status,
+                        });
+                    }
+                } else {
+                    // creating user with a non-empty password is not allowed.
+                    return Err(Error::NonEmptyPassword);
+                }
+
+                Ok(0)
             }
         }
     }
     fn set_hostname(&self, hostname: &str) -> Result<i32, Error> {
         match self {
             Distributions::Debian | Distributions::Ubuntu => {
+                let status = Command::new("hostnamectl")
+                    .arg("set-hostname")
+                    .arg(hostname)
+                    .status()?;
+                if status.success() {
+                    Ok(status.code().unwrap_or(1))
+                } else {
+                    Err(Error::SubprocessFailed {
+                        command: "chpasswd".to_string(),
+                        status,
+                    })
+                }
+            },
+            Distributions::AzureLinux => {
                 let status = Command::new("hostnamectl")
                     .arg("set-hostname")
                     .arg(hostname)
@@ -90,6 +141,7 @@ impl From<&str> for Distributions {
         match s {
             "debian" => Distributions::Debian,
             "ubuntu" => Distributions::Ubuntu,
+            "azurelinux" => Distributions::AzureLinux,
             _ => panic!("Unknown distribution"),
         }
     }

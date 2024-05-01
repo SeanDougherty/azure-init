@@ -31,4 +31,8 @@ pub enum Error {
     NonEmptyPassword,
     #[error("Unable to get list of block devices")]
     BlockUtils(#[from] block_utils::BlockUtilsError),
+    #[error("Unsupported distribution {distro_id}")]
+    UnsupportedDistro {
+        distro_id: String,
+    },
 }

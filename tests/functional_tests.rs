@@ -5,11 +5,14 @@ use libazureinit::distro::{Distribution, Distributions};
 use libazureinit::imds::PublicKeys;
 use libazureinit::{
     goalstate,
+    imds,
     reqwest::{header, Client},
     user,
 };
 
 use std::env;
+use os_release::OsRelease;
+
 
 #[tokio::main]
 async fn main() {
@@ -28,6 +31,15 @@ async fn main() {
     println!("* Beginning functional testing");
     println!("**********************************");
     println!();
+
+    println!("Querying IMDS for metadata");
+    let imds_body = match imds::query_imds(&client).await {
+        Ok(imds_body) => imds_body,
+        Err(_err) => return,
+    };
+    println!("IMDS metadata successfully received");
+    println!("IMDS Body: {}", imds_body);
+
 
     println!("Querying wireserver for Goalstate");
 
@@ -61,7 +73,23 @@ async fn main() {
         username.as_str()
     );
 
-    Distributions::from("ubuntu")
+    // FetchDistro Distributions::from("ubuntu") or Distributions::("AzureLinux")
+    let _os_release = match OsRelease::new() {
+        Ok(release) => release,
+        Err(_err) => return,
+    };
+    
+    let distro = match _os_release.id.as_str() {
+        "debian" => &Distributions::Debian,
+        "ubuntu" => &Distributions::Ubuntu,
+        "azurelinux" | "mariner" => &Distributions::AzureLinux,
+        _ => {
+            println!("Unsupported distribution");
+            return;
+        },
+    };
+
+    distro
         .create_user(username.as_str(), "")
         .expect("Failed to create user");
 
@@ -102,7 +130,7 @@ async fn main() {
     println!();
     println!("Attempting to set the VM hostname");
 
-    Distributions::from("ubuntu")
+    distro
         .set_hostname("test-hostname-set")
         .expect("Failed to set hostname");
     println!("VM hostname successfully set");

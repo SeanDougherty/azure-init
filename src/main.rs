@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+use os_release::OsRelease;
 
 use anyhow::Context;
 
@@ -101,9 +102,26 @@ async fn provision() -> Result<(), anyhow::Error> {
     let mut file_path = "/home/".to_string();
     file_path.push_str(username.as_str());
 
-    // always pass an empty password
-    Distributions::from("ubuntu")
-        .create_user(username.as_str(), "")
+    // FetchDistro Distributions::from("ubuntu") or Distributions::("AzureLinux")
+    let _os_release = match OsRelease::new() {
+        Ok(release) => release,
+        Err(_err) => return Err(LibError::Io(_err)).with_context(|| "Failed to get OS release."),
+    };
+
+    let distro = match _os_release.id.as_str() {
+        "debian" => &Distributions::Debian,
+        "ubuntu" => &Distributions::Ubuntu,
+        "azurelinux" | "mariner" => &Distributions::AzureLinux,
+        _ => {
+            return Err(LibError::UnsupportedDistro {
+                distro_id: _os_release.id,
+            })
+            .with_context(|| "Unsupported distribution.");
+        }
+    };
+
+    //always pass an empty password
+    distro.create_user(username.as_str(), "")
         .with_context(|| format!("Unabled to create user '{username}'"))?;
 
     user::create_ssh_directory(username.as_str(), &file_path)
@@ -122,8 +140,7 @@ async fn provision() -> Result<(), anyhow::Error> {
     let hostname = imds::get_hostname(imds_body.clone())
         .with_context(|| "Failed to get the configured hostname")?;
 
-    Distributions::from("ubuntu")
-        .set_hostname(hostname.as_str())
+    distro.set_hostname(hostname.as_str())
         .with_context(|| "Failed to set hostname.")?;
 
     let vm_goalstate = goalstate::get_goalstate(&client)
@@ -133,5 +150,6 @@ async fn provision() -> Result<(), anyhow::Error> {
         .await
         .with_context(|| "Failed to report VM health.")?;
 
+    println!("Provisioning completed successfully.");
     Ok(())
 }

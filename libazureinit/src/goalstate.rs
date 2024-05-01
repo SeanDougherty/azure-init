@@ -53,7 +53,7 @@ pub async fn get_goalstate(client: &Client) -> Result<Goalstate, Error> {
 
     if response.status().is_success() {
         let body = response.text().await?;
-
+        println!("Goalstate: {}", body);
         let goalstate: Goalstate = from_str(&body)?;
         Ok(goalstate)
     } else {
