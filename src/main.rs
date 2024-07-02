@@ -7,12 +7,11 @@ use anyhow::Context;
 
 use libazureinit::imds::InstanceMetadata;
 use libazureinit::{
-    distro,
     error::Error as LibError,
     goalstate, imds, media,
     media::Environment,
     reqwest::{header, Client},
-    user,
+    HostnameProvisioner, PasswordProvisioner, Provision, UserProvisioner,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -89,23 +88,25 @@ async fn provision() -> Result<(), anyhow::Error> {
     let instance_metadata = imds::query(&client).await?;
     let username = get_username(&instance_metadata, &get_environment()?)?;
 
-    let mut file_path = "/home/".to_string();
-    file_path.push_str(username.as_str());
-
-    // always pass an empty password
-    distro::create_user_with_useradd(username.as_str())
-        .with_context(|| format!("Unabled to create user '{username}'"))?;
-    distro::set_password_with_passwd(username.as_str(), "").with_context(
-        || format!("Unabled to set an empty password for user '{username}'"),
-    )?;
-
-    user::set_ssh_keys(instance_metadata.compute.public_keys, &username)
-        .with_context(|| "Failed to write ssh public keys.")?;
-
-    distro::set_hostname_with_hostnamectl(
-        instance_metadata.compute.os_profile.computer_name.as_str(),
+    Provision::new(
+        instance_metadata.compute.os_profile.computer_name,
+        username,
+        instance_metadata.compute.public_keys,
     )
-    .with_context(|| "Failed to set hostname.")?;
+    .hostname_provisioners([
+        #[cfg(feature = "hostnamectl")]
+        HostnameProvisioner::Hostnamectl,
+    ])
+    .user_provisioners([
+        #[cfg(feature = "useradd")]
+        UserProvisioner::Useradd,
+    ])
+    .password("".to_string())
+    .password_provisioners([
+        #[cfg(feature = "passwd")]
+        PasswordProvisioner::Passwd,
+    ])
+    .provision()?;
 
     let vm_goalstate = goalstate::get_goalstate(&client)
         .await
