@@ -79,13 +79,29 @@ const CDROM_VALID_FS: &[&str] = &["iso9660", "udf"];
 pub fn get_mount_device() -> Result<Vec<String>, Error> {
     let mut list_devices: Vec<String> = Vec::new();
 
+    println!("get_mounted_devices() on AzureLinux 3.0:");
+    let mounted_devs = block_utils::get_mounted_devices();
+    for x in &mounted_devs.ok()
+    {
+        for y in x {
+            println!("device name: {}", y.name);
+            println!("device type: {}", y.fs_type.to_str());
+        }
+    }
+    println!("- end of get_mounted_devices -");
+    println!("get_mounted_devices().find(|dev| CDROM_VALID_FS.contains(&dev.fs_type.to_str())) on AzureLinux 3.0:");
     while let Some(device) = block_utils::get_mounted_devices()?
         .into_iter()
         .find(|dev| CDROM_VALID_FS.contains(&dev.fs_type.to_str()))
     {
+        println!("{}", device.name);
         list_devices.push(device.name);
     }
 
+    for x in &list_devices {
+        println!("list devices: {x}");
+    }
+    println!("- end of output get_mounted_devices().find(... -");
     Ok(list_devices)
 }
 
