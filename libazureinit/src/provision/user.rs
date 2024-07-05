@@ -37,7 +37,7 @@ fn useradd(name: &str) -> Result<(), Error> {
                       "Provisioning agent created this user based on username provided in IMDS",
                     )
                     .arg("--groups")
-                    .arg("adm,audio,cdrom,dialout,dip,floppy,lxd,netdev,plugdev,sudo,video")
+                    .arg(env!("USERADD_GROUPS"))
                     .arg("-d")
                     .arg(home_path)
                     .arg("-m")
