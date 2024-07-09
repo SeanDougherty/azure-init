@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 
 use libazureinit::imds::InstanceMetadata;
+use libazureinit::User;
 use libazureinit::{
     error::Error as LibError,
     goalstate, imds, media,
@@ -87,26 +88,22 @@ async fn provision() -> Result<(), anyhow::Error> {
 
     let instance_metadata = imds::query(&client).await?;
     let username = get_username(&instance_metadata, &get_environment()?)?;
+    let user = User::new(username, instance_metadata.compute.public_keys);
 
-    Provision::new(
-        instance_metadata.compute.os_profile.computer_name,
-        username,
-        instance_metadata.compute.public_keys,
-    )
-    .hostname_provisioners([
-        #[cfg(feature = "hostnamectl")]
-        HostnameProvisioner::Hostnamectl,
-    ])
-    .user_provisioners([
-        #[cfg(feature = "useradd")]
-        UserProvisioner::Useradd,
-    ])
-    .password("".to_string())
-    .password_provisioners([
-        #[cfg(feature = "passwd")]
-        PasswordProvisioner::Passwd,
-    ])
-    .provision()?;
+    Provision::new(instance_metadata.compute.os_profile.computer_name, user)
+        .hostname_provisioners([
+            #[cfg(feature = "hostnamectl")]
+            HostnameProvisioner::Hostnamectl,
+        ])
+        .user_provisioners([
+            #[cfg(feature = "useradd")]
+            UserProvisioner::Useradd,
+        ])
+        .password_provisioners([
+            #[cfg(feature = "passwd")]
+            PasswordProvisioner::Passwd,
+        ])
+        .provision()?;
 
     let vm_goalstate = goalstate::get_goalstate(&client)
         .await

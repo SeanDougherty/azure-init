@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 use libazureinit::imds::PublicKeys;
+use libazureinit::User;
 use libazureinit::{
     goalstate,
     reqwest::{header, Client},
@@ -65,11 +66,10 @@ async fn main() {
             key_data: "ssh-rsa test_key_3".to_owned(),
         },
     ];
-
-    Provision::new("my-hostname".to_string(), username.to_string(), keys)
+    let groups: Vec<String> = vec!["sudo".to_string(), "wheel".to_string()];
+    Provision::new("my-hostname".to_string(), User::new(username, keys).with_groups(groups))
         .hostname_provisioners([HostnameProvisioner::Hostnamectl])
         .user_provisioners([UserProvisioner::Useradd])
-        .password("".to_string())
         .password_provisioners([PasswordProvisioner::Passwd])
         .provision()
         .expect("Failed to provision host");

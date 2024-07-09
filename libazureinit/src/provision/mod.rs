@@ -8,7 +8,7 @@ pub mod user;
 use strum::IntoEnumIterator;
 use tracing::instrument;
 
-use crate::{error::Error, imds::PublicKeys};
+use crate::error::Error;
 
 /// The interface for applying the desired configuration to the host.
 ///
@@ -20,28 +20,23 @@ use crate::{error::Error, imds::PublicKeys};
 /// etc).
 ///
 /// To actually apply the configuration, use [`Provision::provision`].
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Provision {
     hostname: String,
-    username: String,
-    keys: Vec<PublicKeys>,
-    password: Option<String>,
+    user: user::User,
     hostname_backends: Option<Vec<hostname::Provisioner>>,
     user_backends: Option<Vec<user::Provisioner>>,
     password_backends: Option<Vec<password::Provisioner>>,
 }
 
 impl Provision {
-    pub fn new(
-        hostname: impl Into<String>,
-        username: impl Into<String>,
-        ssh_keys: impl Into<Vec<PublicKeys>>,
-    ) -> Self {
+    pub fn new(hostname: impl Into<String>, user: user::User) -> Self {
         Self {
             hostname: hostname.into(),
-            username: username.into(),
-            keys: ssh_keys.into(),
-            ..Default::default()
+            user,
+            hostname_backends: None,
+            user_backends: None,
+            password_backends: None,
         }
     }
 
@@ -85,12 +80,6 @@ impl Provision {
         self
     }
 
-    /// Set the given password for the provisioned user.
-    pub fn password(mut self, password: String) -> Self {
-        self.password = Some(password);
-        self
-    }
-
     /// Provision the host.
     #[instrument(skip_all)]
     pub fn provision(self) -> Result<(), Error> {
@@ -99,7 +88,7 @@ impl Provision {
             .iter()
             .find_map(|backend| {
                 backend
-                    .create(&self.username)
+                    .create(&self.user)
                     .map_err(|e| {
                         tracing::info!(
                             error=?e,
@@ -118,7 +107,7 @@ impl Provision {
             .iter()
             .find_map(|backend| {
                 backend
-                    .set(&self.username, self.password.as_deref().unwrap_or(""))
+                    .set(&self.user)
                     .map_err(|e| {
                         tracing::info!(
                             error=?e,
@@ -132,13 +121,13 @@ impl Provision {
             })
             .ok_or(Error::NoPasswordProvisioner)?;
 
-        if !self.keys.is_empty() {
-            let user = nix::unistd::User::from_name(&self.username)?.ok_or(
+        if !self.user.ssh_keys.is_empty() {
+            let user = nix::unistd::User::from_name(&self.user.name)?.ok_or(
                 Error::UserMissing {
-                    user: self.username,
+                    user: self.user.name,
                 },
             )?;
-            ssh::provision_ssh(&user, &self.keys)?;
+            ssh::provision_ssh(&user, &self.user.ssh_keys)?;
         }
 
         self.hostname_backends
@@ -167,18 +156,18 @@ impl Provision {
 #[cfg(test)]
 mod tests {
 
+    use crate::User;
+
     use super::{hostname, password, user, Provision};
 
     #[test]
     fn test_successful_provision() {
         let _p = Provision::new(
             "my-hostname".to_string(),
-            "my-user".to_string(),
-            vec![],
+            User::new("azureuser", vec![]),
         )
         .hostname_provisioners([hostname::Provisioner::FakeHostnamectl])
         .user_provisioners([user::Provisioner::FakeUseradd])
-        .password("password".to_string())
         .password_provisioners([password::Provisioner::FakePasswd])
         .provision()
         .unwrap();

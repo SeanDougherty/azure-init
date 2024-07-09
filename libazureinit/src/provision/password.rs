@@ -5,7 +5,7 @@ use std::process::Command;
 
 use tracing::instrument;
 
-use crate::error::Error;
+use crate::{error::Error, User};
 
 #[derive(strum::EnumIter, Debug, Clone)]
 #[non_exhaustive]
@@ -16,13 +16,9 @@ pub enum Provisioner {
 }
 
 impl Provisioner {
-    pub(crate) fn set(
-        &self,
-        username: impl AsRef<str>,
-        password: impl AsRef<str>,
-    ) -> Result<(), Error> {
+    pub(crate) fn set(&self, user: &User) -> Result<(), Error> {
         match self {
-            Self::Passwd => passwd(username.as_ref(), password.as_ref()),
+            Self::Passwd => passwd(user),
             #[cfg(test)]
             Self::FakePasswd => Ok(()),
         }
@@ -30,12 +26,14 @@ impl Provisioner {
 }
 
 #[instrument(skip_all)]
-fn passwd(username: &str, password: &str) -> Result<(), Error> {
+fn passwd(user: &User) -> Result<(), Error> {
     let path_passwd = env!("PATH_PASSWD");
 
-    if password.is_empty() {
-        let status =
-            Command::new(path_passwd).arg("-d").arg(username).status()?;
+    if user.password.is_none() {
+        let status = Command::new(path_passwd)
+            .arg("-d")
+            .arg(&user.name)
+            .status()?;
         if !status.success() {
             return Err(Error::SubprocessFailed {
                 command: path_passwd.to_string(),
